@@ -1,28 +1,94 @@
-import { useRoute } from '@react-navigation/native';
-import { Box, HStack, Text, useTheme, VStack } from 'native-base';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { Box, HStack, ScrollView, Text, useTheme, VStack } from 'native-base';
 import { CircleWavyCheck, ClipboardText, DesktopTower, Hourglass } from 'phosphor-react-native';
-import { useState } from 'react';
-import { Line } from 'react-native-svg';
+import { useEffect, useState } from 'react';
+import firestore from '@react-native-firebase/firestore'
 import { Button } from '../components/Button';
 import { Header } from '../components/Header';
 import { Input } from '../components/Input';
 import { OrderProps } from '../components/Order';
+import { OrderFirestoreDTO } from '../DTO/OrderFirestoreDTO';
+import { dateFormat } from '../utils/firestoreDateFormat';
+import { Loading } from '../components/Loading';
+import { Alert } from 'react-native';
+import { CardDetails } from '../components/CardDetails';
 
 type RouteParams = {
 	orderId: string;
 }
 
+type OrderDetails = OrderProps & {
+	description: string;
+	solution?: string;
+	closed?: string;
+}
+
 export function Details() {
 	const route = useRoute();
 	const { colors } = useTheme();
+	const [isLoading, setIsLoading] = useState(true);
+	const [isClosing, setIsClosing] = useState(false);
+	const [solution, setSolution] = useState('');
 	const { orderId } = route.params as RouteParams;
-	const [order, setOrder] = useState<OrderProps & { problem: string }>({
-		id: '123',
-		patrimony: '1389813',
-		when: '18/07/2022 às 13:00',
-		status: 'open',
-		problem: 'Lorem Ipsum has been the industrys standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book.'
-	});
+	const [order, setOrder] = useState<OrderDetails>();
+
+	const navigation = useNavigation();
+	function handleFinish() {
+		if (!solution) {
+			return Alert.alert('Solicitação', 'Informe a solução para encerrar a solicitação');
+		}
+
+		setIsClosing(true);
+
+		firestore()
+			.collection<OrderFirestoreDTO>('orders')
+			.doc(orderId)
+			.update({
+				status: 'closed',
+				solution,
+				closed_at: firestore.FieldValue.serverTimestamp()
+			})
+			.then(() => {
+				Alert.alert('Solicitação', 'Solicitação finalizada!');
+				navigation.goBack();
+			})
+			.catch((error) => {
+				console.log(error);
+				Alert.alert('Solicitação', 'Erro desconhecido tentando encerrar a solicitação!')
+				setIsClosing(false);
+			})
+	}
+
+	useEffect(() => {
+		setIsLoading(true);
+
+		firestore()
+			.collection<OrderFirestoreDTO>('orders')
+			.doc(orderId)
+			.get()
+			.then((doc) => {
+				const { patrimony, description, status, created_at, closed_at, solution } = doc.data();
+
+				const closed = closed_at ? dateFormat(closed_at) : null;
+
+				setOrder({
+					id: doc.id,
+					patrimony,
+					description,
+					status,
+					solution,
+					when: dateFormat(created_at),
+					closed
+				});
+
+				setIsLoading(false);
+			})
+
+	}, [])
+
+	if (isLoading) {
+		return <Loading />
+	}
 
 	return (
 		<VStack flex={1} bg="gray.700">
@@ -45,63 +111,31 @@ export function Details() {
 				}
 			</HStack>
 
-			<VStack flex={1} py={5} px={6} space={5}>
-				<VStack bg="gray.600">
-					<VStack p={6}>
-						<HStack space={2} >
-							<DesktopTower size={20} color={colors.primary[700]} />
-							<Text textTransform="uppercase" color="gray.300" fontSize="sm">
-								Equipamento
-							</Text>
-						</HStack>
-						<Text mt={2} color="gray.100" fontSize="md">
-							Patrimônio {order.patrimony}
-						</Text>
-					</VStack>
-				</VStack>
-				<VStack bg="gray.600">
-					<VStack p={6}>
-						<HStack space={2} >
-							<ClipboardText size={20} color={colors.primary[700]} />
-							<Text textTransform="uppercase" color="gray.300" fontSize="sm">
-								Descrição do Problema
-							</Text>
-						</HStack>
-						<Text mt={2} color="gray.100" fontSize="md">
-							{order.problem}
-						</Text>
-						<Text mt={3} pt={3} borderTopWidth={1} borderTopColor="gray.500" color="gray.300">
-							Registrado em {order.when}
-						</Text>
-					</VStack>
-				</VStack>
-				<VStack flex={order.status === 'open' ? 1 : 0} bg="gray.600">
-					<VStack flex={order.status === 'open' ? 1 : 0} p={6}>
-						<HStack space={2} >
-							<CircleWavyCheck size={20} color={colors.primary[700]} />
-							<Text textTransform="uppercase" color="gray.300" fontSize="sm">
-								Solução
-							</Text>
-						</HStack>
-						{order.status === 'open'
-							?
-							<Input mt={6} mx={-3} flex={1} bg="gray.600" textAlignVertical="top" placeholder="Descrição da solução" multiline />
-							:
-							<>
-								<Text mt={2} color="gray.100" fontSize="md">
-									{order.problem}
-								</Text>
-								<Text mt={3} pt={3} borderTopWidth={1} borderTopColor="gray.500" color="gray.300">
-									Registrado em {order.when}
-								</Text>
-							</>
-						}
-					</VStack>
-				</VStack>
-				{order.status === 'open' &&
-					<Button title="Finalizar" />}
-			</VStack>
+			<ScrollView flex={1} mx={5} showsVerticalScrollIndicator={false}>
 
-		</VStack>
+				<CardDetails
+					title="Equipamento"
+					icon={DesktopTower}
+					description={`Patrimônio ${order.patrimony}`}
+				/>
+				<CardDetails
+					title="Descrição do Problema"
+					icon={ClipboardText}
+					description={order.description}
+					footer={`Registrado em ${order.when}`}
+				/>
+				<CardDetails
+					title="Solução"
+					icon={CircleWavyCheck}
+					description={order.status === 'closed' && order.solution}
+					footer={order.status === 'closed' && `Encerrado em ${order.closed}`}
+				>
+					{order.status === 'open' && <Input mx={-3} textAlignVertical="top" h={32} placeholder="Descrição da solução" multiline onChangeText={setSolution} />}
+				</CardDetails>
+				{order.status === 'open' &&
+					<Button onPress={handleFinish} title="Finalizar" isLoading={isClosing} />}
+			</ScrollView>
+
+		</VStack >
 	);
 }
