@@ -16,7 +16,7 @@ Projeto construído durante o Ignite Lab React Native para lançamento de solici
 
 Inclusão do componente [BarCodeScanner](https://docs.expo.dev/versions/latest/sdk/bar-code-scanner/) para leitura do código de barras do patrimônio.
 Demonstração abaixo:
-![Leitura do código de barras](https://j.gifs.com/MZ2043.gif)
+![Leitura do código de barras](https://user-images.githubusercontent.com/3437672/180081689-add14383-7c17-4109-b12f-520c0788877d.gif)
 
 
 ## Stack utilizada
